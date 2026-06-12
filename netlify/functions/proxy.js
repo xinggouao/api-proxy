@@ -1,53 +1,41 @@
-export default async function handler(req) {
-  const { searchParams } = new URL(req.url);
-  // 目标真实业务API地址
-  const targetAPI = "http://gdey.ruijiadashop.cn/api/card/intelligentDetection";
-  const targetUrl = new URL(targetAPI);
+exports.handler = async (event) => {
+    const { queryStringParameters, httpMethod } = event;
+    const dev_no = queryStringParameters.dev_no;
 
-  // 把前端携带的dev_no参数完整透传给目标接口
-  searchParams.forEach((val, key) => {
-    targetUrl.searchParams.set(key, val);
-  });
+    // CORS跨域头
+    const headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET,OPTIONS",
+        "Content-Type": "application/json"
+    };
 
-  // 全局CORS跨域配置，允许你的Gist网页跨域调用
-  const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,OPTIONS",
-    "Access-Control-Allow-Headers": "*"
-  };
+    // 预检OPTIONS直接放行
+    if (httpMethod === "OPTIONS") {
+        return {
+            statusCode: 204,
+            headers
+        };
+    }
 
-  // 处理浏览器OPTIONS预检跨域请求
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders
-    });
-  }
+    try {
+        const targetUrl = `http://gdey.ruijiadashop.cn/api/card/intelligentDetection?dev_no=${dev_no}`;
+        const resp = await fetch(targetUrl, { timeout: 8000 });
+        const data = await resp.json();
 
-  try {
-    // 转发请求到真实接口，8秒超时防止卡死
-    const resp = await fetch(targetUrl.toString(), {
-      method: "GET",
-      signal: AbortSignal.timeout(8000)
-    });
-    const respText = await resp.text();
-
-    // 原样返回接口数据，附加跨域头
-    return new Response(respText, {
-      status: resp.status,
-      headers: {
-        ...Object.fromEntries(resp.headers),
-        ...corsHeaders
-      }
-    });
-  } catch (err) {
-    // 捕获转发异常，返回友好错误提示
-    return new Response(JSON.stringify({
-      code: 502,
-      msg: "API代理转发失败：" + err.message
-    }), {
-      status: 502,
-      headers: corsHeaders
-    });
-  }
-}
+        return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify(data)
+        };
+    } catch (err) {
+        return {
+            statusCode: 502,
+            headers,
+            body: JSON.stringify({
+                code: 502,
+                msg: "代理转发失败",
+                error: String(err)
+            })
+        };
+    }
+};
